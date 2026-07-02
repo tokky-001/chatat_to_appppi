@@ -216,3 +216,8 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# ChatAI_to_API 固有
+.browser_profile/
+saved/
+.file_index.json

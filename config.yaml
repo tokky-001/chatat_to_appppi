@@ -1,0 +1,75 @@
+# =============================================================
+#  ChatAI_to_API 設定ファイル
+#  社内チャットAI(Web画面のみ)を OpenAI互換API として公開する
+# =============================================================
+
+chat:
+  # 社内チャットAIのURL（ログイン後にチャット画面が出るURL）
+  url: "https://internal-chat.example.com/"
+
+  # ブラウザプロファイルの保存先。ここにSSO/Cookieが保存され、
+  # 2回目以降はログイン不要になる。
+  user_data_dir: "./.browser_profile"
+
+  # true にするとブラウザ画面を出さない。初回ログイン時は false 推奨。
+  headless: false
+
+  # --- セレクタ（社内チャットAIのHTMLに合わせて書き換える） ---------
+  # 開発者ツール(F12)で要素を調べて調整してください。
+  selectors:
+    # 質問を入力する欄（textarea か contenteditable のどちらか）
+    input: "textarea, div[contenteditable='true']"
+    # 送信ボタン（無い場合は send_key: Enter で送る）
+    send_button: "button[type='submit']"
+    # AIの回答が入る要素（複数マッチする場合は最後のものを回答とみなす）
+    assistant_message: "[data-message-author-role='assistant'], .assistant-message, .markdown"
+    # 新規チャット開始ボタン（任意。無ければ空文字）
+    new_chat: ""
+
+  # 送信ボタンが無い/効かない場合、入力欄で押すキー
+  send_key: "Enter"
+
+  # --- 回答の完了判定 -------------------------------------------
+  # 回答テキストが stable_seconds 秒間変化しなくなったら「完了」とみなす
+  stable_seconds: 2.5
+  # 1回答あたりの最大待機秒数（超えたらタイムアウト）
+  response_timeout: 180
+
+context:
+  # このチャットAIのコンテキスト最大値（トークン）。
+  # 送信内容がこれを超えそうな場合は分割/別チャットで拡張する。
+  max_tokens: 8000
+  # 分割時の1チャンクあたり目標トークン（max_tokens より小さく）
+  chunk_tokens: 6000
+
+server:
+  host: "127.0.0.1"
+  port: 8100
+  # Claude Code等から接続する際のダミーAPIキー（任意の文字列）
+  api_key: "local-dummy-key"
+  # OpenAI /v1/models で返すモデル名
+  model_name: "internal-chat"
+
+output:
+  # 回答を自動でファイル保存する場合の保存先ディレクトリ（空なら保存しない）
+  save_dir: "./saved"
+
+rag:
+  # true にすると、質問に関連するローカルファイル要約を自動でプロンプトに注入する
+  # （擬似ローカルファイル参照）。事前に `python -m chatai2api.cli index <dir>` を実行。
+  enabled: false
+  # 要約インデックスの保存先
+  index_path: "./.file_index.json"
+  # インデックス対象の拡張子
+  include_ext: [".md", ".txt", ".py", ".js", ".ts", ".tsx", ".json", ".yaml", ".yml",
+                ".java", ".go", ".rb", ".sh", ".sql", ".html", ".css", ".csv"]
+  # これより大きいファイルはスキップ（バイト）
+  max_file_bytes: 200000
+  # AI要約に渡す本文の最大文字数（先頭から切り出し）
+  summary_input_chars: 6000
+  # AIなし(--no-ai)要約モードで抜粋する先頭行数
+  extract_lines: 30
+  # プロンプトに注入する要約ブロックの最大トークン
+  inject_tokens: 2000
+  # 注入する関連ファイルの最大件数
+  top_k: 5

@@ -1,0 +1,314 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ChatAI_to_API 管理コンソール</title>
+<style>
+  :root{
+    --surface-1:#fcfcfb; --surface-2:#ffffff;
+    --text-primary:#0b0b0b; --text-secondary:#52514e; --text-muted:#8a897f;
+    --border:#e7e6e1; --hairline:#efeee9;
+    --accent:#2a78d6; --accent-strong:#1c5cab;
+    --track:#cde2fb;               /* blue-100: メーターの未充填トラック */
+    --status-good:#0ca30c; --status-warning:#fab219; --status-critical:#d03b3b;
+    --radius:10px;
+  }
+  *{box-sizing:border-box}
+  body{
+    margin:0; background:var(--surface-1); color:var(--text-primary);
+    font-family:-apple-system,BlinkMacSystemFont,"Hiragino Sans","Noto Sans JP",sans-serif;
+    font-size:14px; line-height:1.6;
+  }
+  header{
+    display:flex; align-items:center; gap:12px; padding:14px 24px;
+    background:var(--surface-2); border-bottom:1px solid var(--border);
+    position:sticky; top:0; z-index:5;
+  }
+  header h1{font-size:16px; font-weight:600; margin:0; flex:1}
+  .dot{width:10px;height:10px;border-radius:50%;background:var(--text-muted);display:inline-block}
+  .dot.on{background:var(--status-good)}
+  .statusline{display:flex;align-items:center;gap:8px;color:var(--text-secondary);font-size:13px}
+  button{
+    font:inherit; padding:7px 14px; border-radius:8px; border:1px solid var(--border);
+    background:var(--surface-2); color:var(--text-primary); cursor:pointer;
+  }
+  button:hover{border-color:var(--accent)}
+  button.primary{background:var(--accent); border-color:var(--accent); color:#fff}
+  button.primary:hover{background:var(--accent-strong)}
+  button:disabled{opacity:.45; cursor:not-allowed}
+  main{max-width:1100px; margin:0 auto; padding:20px 24px 60px}
+
+  /* stat tiles */
+  .tiles{display:grid; grid-template-columns:repeat(auto-fit,minmax(170px,1fr)); gap:12px; margin-bottom:20px}
+  .tile{background:var(--surface-2); border:1px solid var(--border); border-radius:var(--radius); padding:14px 16px}
+  .tile .label{font-size:12px; color:var(--text-secondary)}
+  .tile .value{font-size:26px; font-weight:600; margin-top:2px}
+  .tile .sub{font-size:12px; color:var(--text-muted)}
+
+  .grid{display:grid; grid-template-columns:1fr 1fr; gap:16px}
+  @media(max-width:900px){.grid{grid-template-columns:1fr}}
+  .card{background:var(--surface-2); border:1px solid var(--border); border-radius:var(--radius); padding:18px}
+  .card.wide{grid-column:1/-1}
+  .card h2{font-size:14px; font-weight:600; margin:0 0 12px}
+  textarea,input[type=text]{
+    width:100%; font:inherit; padding:9px 11px; border:1px solid var(--border);
+    border-radius:8px; background:var(--surface-1); color:var(--text-primary); resize:vertical;
+  }
+  textarea:focus,input:focus{outline:none; border-color:var(--accent)}
+
+  /* meter */
+  .meter-head{display:flex; justify-content:space-between; align-items:baseline; margin:14px 0 6px}
+  .meter-head .nums{font-weight:600}
+  .meter-head .nums .max{color:var(--text-secondary); font-weight:400}
+  .meter{height:12px; border-radius:6px; background:var(--track); overflow:hidden}
+  .meter .fill{height:100%; width:0%; border-radius:6px; background:var(--accent); transition:width .25s,background .25s}
+  .verdict{display:flex; align-items:center; gap:8px; margin-top:10px; font-size:13px}
+  .verdict .icon{font-weight:700}
+  .verdict.good .icon{color:var(--status-good)}
+  .verdict.warning .icon{color:var(--status-warning)}
+  .verdict.critical .icon{color:var(--status-critical)}
+
+  .filelist{margin:10px 0 0; padding:0; list-style:none; font-size:13px}
+  .filelist li{display:flex; justify-content:space-between; gap:10px; padding:5px 0; border-bottom:1px solid var(--hairline)}
+  .filelist .tok{color:var(--text-secondary); font-variant-numeric:tabular-nums}
+  .filelist .rm{color:var(--status-critical); cursor:pointer; border:none; background:none; padding:0 4px}
+  .hint{font-size:12px; color:var(--text-muted); margin-top:8px}
+  .msg{font-size:13px; color:var(--text-secondary); margin-top:8px; white-space:pre-wrap}
+  .answer{
+    margin-top:12px; padding:12px; background:var(--surface-1); border:1px solid var(--border);
+    border-radius:8px; white-space:pre-wrap; max-height:340px; overflow:auto; font-size:13px;
+  }
+  .row{display:flex; gap:8px; align-items:center; flex-wrap:wrap; margin-top:10px}
+  .savedlist{list-style:none; margin:0; padding:0; font-size:13px; max-height:220px; overflow:auto}
+  .savedlist li{padding:6px 4px; border-bottom:1px solid var(--hairline); cursor:pointer; display:flex; justify-content:space-between}
+  .savedlist li:hover{color:var(--accent)}
+  .log{font-family:ui-monospace,Menlo,monospace; font-size:12px; background:var(--surface-1);
+       border:1px solid var(--border); border-radius:8px; padding:10px; max-height:160px; overflow:auto;
+       white-space:pre-wrap; margin-top:10px; color:var(--text-secondary)}
+  label.check{display:flex; align-items:center; gap:6px; font-size:13px; color:var(--text-secondary)}
+</style>
+</head>
+<body>
+<header>
+  <h1>ChatAI_to_API 管理コンソール</h1>
+  <div class="statusline"><span class="dot" id="dot"></span><span id="statusText">確認中…</span></div>
+  <button id="btnLogin">初回ログイン</button>
+  <button class="primary" id="btnServer">サーバ起動</button>
+</header>
+
+<main>
+  <div class="tiles">
+    <div class="tile"><div class="label">コンテキスト上限</div><div class="value" id="tMax">–</div><div class="sub">トークン (config.yaml)</div></div>
+    <div class="tile"><div class="label">現在の入力量</div><div class="value" id="tUsed">0</div><div class="sub">プロンプト+添付</div></div>
+    <div class="tile"><div class="label">インデックス済みファイル</div><div class="value" id="tIndexed">–</div><div class="sub" id="tRag">RAG: –</div></div>
+    <div class="tile"><div class="label">保存済み回答</div><div class="value" id="tSaved">–</div><div class="sub">./saved</div></div>
+  </div>
+
+  <div class="grid">
+    <section class="card wide">
+      <h2>コンテキストチェッカー &amp; 質問送信</h2>
+      <textarea id="prompt" rows="5" placeholder="プロンプトを入力…（入力すると下のメーターが即時更新されます）"></textarea>
+      <div class="row">
+        <button id="btnAttach">＋ ファイルを添付</button>
+        <input type="file" id="fileInput" multiple style="display:none">
+        <span class="hint">テキスト系ファイル(.md .txt .py .csv など)を想定。トークン量に加算されます。</span>
+      </div>
+      <ul class="filelist" id="fileList"></ul>
+
+      <div class="meter-head">
+        <span style="font-size:12px;color:var(--text-secondary)">コンテキスト使用量</span>
+        <span class="nums"><span id="mUsed">0</span> <span class="max">/ <span id="mMax">–</span> トークン</span></span>
+      </div>
+      <div class="meter"><div class="fill" id="mFill"></div></div>
+      <div class="verdict good" id="verdict"><span class="icon">✓</span><span id="verdictText">コンテキストに収まります</span></div>
+
+      <div class="row">
+        <button class="primary" id="btnAsk">質問を送信</button>
+        <span class="hint">送信には稼働中のAPIサーバが必要です。回答は自動でファイル保存されます。</span>
+      </div>
+      <div class="msg" id="askMsg"></div>
+      <div class="answer" id="answer" style="display:none"></div>
+    </section>
+
+    <section class="card">
+      <h2>RAGインデックス（擬似ローカル参照）</h2>
+      <input type="text" id="indexDir" placeholder="対象ディレクトリ（例: ~/projects/myapp）">
+      <div class="row">
+        <label class="check"><input type="checkbox" id="noAi" checked> AIを使わない（先頭抜粋・高速）</label>
+        <button id="btnIndex">インデックス作成</button>
+      </div>
+      <div class="hint">AI要約モードはサーバ停止中のみ実行できます（ブラウザ競合のため）。</div>
+      <div class="log" id="indexLog" style="display:none"></div>
+    </section>
+
+    <section class="card">
+      <h2>保存済み回答</h2>
+      <ul class="savedlist" id="savedList"></ul>
+      <div class="answer" id="savedView" style="display:none"></div>
+    </section>
+  </div>
+</main>
+
+<script>
+const $ = id => document.getElementById(id);
+let attached = [];      // {name, text}
+let serverRunning = false;
+const fmt = n => n.toLocaleString('ja-JP');
+
+/* ---------- 状態ポーリング ---------- */
+async function refreshStatus(){
+  try{
+    const s = await (await fetch('/api/status')).json();
+    serverRunning = s.server_running;
+    $('dot').className = 'dot' + (s.server_running ? ' on' : '');
+    $('statusText').textContent = s.server_running
+      ? `稼働中 ${s.server_url}` : '停止中';
+    $('btnServer').textContent = s.server_running ? 'サーバ停止' : 'サーバ起動';
+    $('btnServer').className = s.server_running ? '' : 'primary';
+    $('btnLogin').textContent = s.login_running ? 'ログイン中…'
+      : (s.profile_exists ? '再ログイン' : '初回ログイン');
+    $('tMax').textContent = fmt(s.max_tokens);
+    $('mMax').textContent = fmt(s.max_tokens);
+    $('tIndexed').textContent = fmt(s.indexed_files);
+    $('tRag').textContent = 'RAG: ' + (s.rag_enabled ? '有効' : '無効');
+    $('tSaved').textContent = fmt(s.saved_count);
+  }catch(e){
+    $('statusText').textContent = 'GUIサーバに接続できません';
+  }
+}
+refreshStatus(); setInterval(refreshStatus, 3000);
+
+/* ---------- サーバ起動/停止・ログイン ---------- */
+$('btnServer').onclick = async () => {
+  $('btnServer').disabled = true;
+  const ep = serverRunning ? '/api/server/stop' : '/api/server/start';
+  const r = await (await fetch(ep, {method:'POST'})).json();
+  $('askMsg').textContent = r.message || '';
+  $('btnServer').disabled = false;
+  refreshStatus();
+};
+$('btnLogin').onclick = async () => {
+  const r = await (await fetch('/api/login', {method:'POST'})).json();
+  $('askMsg').textContent = r.message || '';
+};
+
+/* ---------- 添付ファイル ---------- */
+$('btnAttach').onclick = () => $('fileInput').click();
+$('fileInput').onchange = async e => {
+  for(const f of e.target.files){
+    const text = await f.text();
+    attached.push({name: f.name, text});
+  }
+  e.target.value = '';
+  renderFiles(); computeTokens();
+};
+function renderFiles(perFile){
+  const ul = $('fileList'); ul.innerHTML = '';
+  attached.forEach((f,i) => {
+    const li = document.createElement('li');
+    const tok = perFile && perFile[i] ? fmt(perFile[i].tokens)+' tok' : '…';
+    li.innerHTML = `<span>📄 ${f.name}</span>
+      <span><span class="tok">${tok}</span>
+      <button class="rm" title="削除" data-i="${i}">✕</button></span>`;
+    ul.appendChild(li);
+  });
+  ul.querySelectorAll('.rm').forEach(b => b.onclick = () => {
+    attached.splice(+b.dataset.i,1); renderFiles(); computeTokens();
+  });
+}
+
+/* ---------- コンテキストメーター ---------- */
+let tokTimer = null;
+$('prompt').addEventListener('input', () => {
+  clearTimeout(tokTimer); tokTimer = setTimeout(computeTokens, 350);
+});
+async function computeTokens(){
+  const body = {prompt: $('prompt').value, files: attached};
+  const r = await (await fetch('/api/tokens', {
+    method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify(body)})).json();
+  $('tUsed').textContent = fmt(r.total);
+  $('mUsed').textContent = fmt(r.total);
+  $('mMax').textContent = fmt(r.max_tokens);
+  renderFiles(r.files);
+
+  const pct = Math.min(r.ratio*100, 100);
+  const fill = $('mFill');
+  fill.style.width = pct + '%';
+  const v = $('verdict'), vt = $('verdictText');
+  if(r.overflow){
+    fill.style.background = 'var(--status-critical)';
+    v.className = 'verdict critical'; v.querySelector('.icon').textContent = '✕';
+    vt.textContent = `コンテキストを溢れます — 自動で ${r.chunks} 分割して送信されます（${fmt(r.total - r.max_tokens)} トークン超過）`;
+  }else if(r.ratio >= 0.75){
+    fill.style.background = 'var(--status-warning)';
+    v.className = 'verdict warning'; v.querySelector('.icon').textContent = '⚠';
+    vt.textContent = `残りわずか — あと ${fmt(r.max_tokens - r.total)} トークンで上限です`;
+  }else{
+    fill.style.background = 'var(--accent)';
+    v.className = 'verdict good'; v.querySelector('.icon').textContent = '✓';
+    vt.textContent = 'コンテキストに収まります';
+  }
+}
+
+/* ---------- 質問送信 ---------- */
+$('btnAsk').onclick = async () => {
+  const prompt = $('prompt').value.trim();
+  if(!prompt){ $('askMsg').textContent = 'プロンプトを入力してください。'; return; }
+  $('btnAsk').disabled = true;
+  $('askMsg').textContent = '送信中…（社内AIの回答完了を待っています）';
+  $('answer').style.display = 'none';
+  try{
+    const res = await fetch('/api/ask', {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({prompt, files: attached})});
+    const j = await res.json();
+    if(!res.ok) throw new Error(j.detail || res.statusText);
+    $('answer').textContent = j.answer;
+    $('answer').style.display = 'block';
+    $('askMsg').textContent = '完了（回答は保存フォルダにも書き出されました）';
+    loadSaved();
+  }catch(e){
+    $('askMsg').textContent = 'エラー: ' + e.message;
+  }
+  $('btnAsk').disabled = false;
+};
+
+/* ---------- インデックス ---------- */
+let indexPoll = null;
+$('btnIndex').onclick = async () => {
+  const r = await (await fetch('/api/index', {
+    method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({directory: $('indexDir').value, no_ai: $('noAi').checked})})).json();
+  $('indexLog').style.display = 'block';
+  $('indexLog').textContent = r.message;
+  if(r.ok && !indexPoll) indexPoll = setInterval(pollIndex, 1500);
+};
+async function pollIndex(){
+  const r = await (await fetch('/api/index/status')).json();
+  if(r.log.length) $('indexLog').textContent = r.log.join('\n');
+  if(!r.running){ clearInterval(indexPoll); indexPoll = null; refreshStatus(); }
+}
+
+/* ---------- 保存済み回答 ---------- */
+async function loadSaved(){
+  const r = await (await fetch('/api/saved')).json();
+  const ul = $('savedList'); ul.innerHTML = '';
+  r.files.forEach(f => {
+    const li = document.createElement('li');
+    li.innerHTML = `<span>${f.name}</span><span style="color:var(--text-muted)">${(f.size/1024).toFixed(1)} KB</span>`;
+    li.onclick = async () => {
+      const d = await (await fetch('/api/saved/'+encodeURIComponent(f.name))).json();
+      $('savedView').textContent = d.content;
+      $('savedView').style.display = 'block';
+    };
+    ul.appendChild(li);
+  });
+  if(!r.files.length) ul.innerHTML = '<li style="color:var(--text-muted)">まだ保存された回答はありません</li>';
+}
+loadSaved();
+computeTokens();
+</script>
+</body>
+</html>
